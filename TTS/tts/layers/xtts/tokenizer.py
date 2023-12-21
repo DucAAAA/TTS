@@ -595,22 +595,22 @@ class VoiceBpeTokenizer:
         if vocab_file is not None:
             self.tokenizer = Tokenizer.from_file(vocab_file)
         self.char_limits = {
-            "en": 250,
-            "de": 253,
-            "fr": 273,
-            "es": 239,
-            "it": 213,
-            "pt": 203,
-            "pl": 224,
-            "zh": 82,
-            "ar": 166,
-            "cs": 186,
-            "ru": 182,
-            "nl": 251,
-            "tr": 226,
-            "ja": 71,
-            "hu": 224,
-            "ko": 95,
+            "en": 4096,
+            "de": 4096,
+            "fr": 4096,
+            "es": 4096,
+            "it": 4096,
+            "pt": 4096,
+            "pl": 4096,
+            "zh": 4096,
+            "ar": 4096,
+            "cs": 4096,
+            "ru": 4096,
+            "nl": 4096,
+            "tr": 4096,
+            "ja": 4096,
+            "hu": 4096,
+            "ko": 4096,
         }
 
     @cached_property

@@ -10,10 +10,11 @@ RUN pip3 install torch torchaudio --extra-index-url https://download.pytorch.org
 RUN rm -rf /root/.cache/pip
 
 # Copy TTS repository contents:
-WORKDIR /root
-COPY . /root
+RUN mkdir workspace
+WORKDIR /root/workspace
+COPY . /root/workspace
+RUN mkdir /root/.local/share/tts
+RUN mv models/* /root/.local/share/tts
 
 RUN make install
-
-ENTRYPOINT ["tts"]
-CMD ["--help"]
+CMD python3 TTS/server/server.py

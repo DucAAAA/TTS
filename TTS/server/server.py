@@ -15,6 +15,11 @@ from TTS.config import load_config
 from TTS.utils.manage import ModelManager
 from TTS.utils.synthesizer import Synthesizer
 
+import runpod
+from requests.adapters import HTTPAdapter, Retry
+from runpod.serverless.utils.rp_validator import validate
+from schemas.api import API_SCHEMA
+from TTS.api import TTS
 
 def create_argparser():
     def convert_boolean(x):
@@ -249,8 +254,89 @@ def mary_tts_api_process():
         synthesizer.save_wav(wavs, out)
     return send_file(out, mimetype="audio/wav")
 
+@app.route("/healthcheck", methods=["GET"])
+def healthcheck():
+    return {
+        'code': 200,
+        'status': 'Success'
+    }
+
+
+def validate_api(event):
+    if 'api' not in event['input']:
+        return {
+            'errors': '"api" is a required field in the "input" payload'
+        }
+
+    api = event['input']['api']
+
+    if type(api) is not dict:
+        return {
+            'errors': '"api" must be a dictionary containing "method" and "endpoint"'
+        }
+
+    api['endpoint'] = api['endpoint'].lstrip('/')
+
+    return validate(api, API_SCHEMA)
+
+
+def validate_payload(event):
+    method = event['input']['api']['method']
+    endpoint = event['input']['api']['endpoint']
+    payload = event['input']['payload']
+    validated_input = payload
+
+    return endpoint, event['input']['api']['method'], validated_input
+
+
+def handler(event):
+    validated_api = validate_api(event)
+
+    if 'errors' in validated_api:
+        return {
+            'error': validated_api['errors']
+        }
+
+    endpoint, method, validated_input = validate_payload(event)
+
+    if 'errors' in validated_input:
+        return {
+            'error': validated_input['errors']
+        }
+
+    payload = validated_input
+
+    try:
+        if method == 'POST':
+            if endpoint == 'voices':
+                tts = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2", gpu=True).to("cuda")
+                tts.tts_to_file(
+                    text="It took me quite a long time to develop a voice, and now that I have it I'm not going to be silent.",
+                    file_path="/root/workspace/TTS/outputs/output.wav",
+                    speaker_wav="/root/workspace/TTS/samples/bria-young-and-soft.mp3",
+                    language="en"
+                )
+            elif endpoint == 'conversions':
+                tts = TTS(model_name="voice_conversion_models/multilingual/vctk/freevc24", gpu=True).to("cuda")
+                
+    except Exception as e:
+        return {
+            'error': str(e)
+        }
+
+    return {
+        'code': 200,
+        'message': 'success'
+    }
 
 def main():
+    # download models
+    TTS(model_name="voice_conversion_models/multilingual/vctk/freevc24", progress_bar=False).to("cuda")
+    runpod.serverless.start(
+        {
+            'handler': handler
+        }
+    )
     app.run(debug=args.debug, host="::", port=args.port)
 
 
