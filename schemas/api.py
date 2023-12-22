@@ -11,11 +11,8 @@ API_SCHEMA = {
         'type': str,
         'required': True,
         'constraints': lambda method: method in [
-            'generate',
-            'chat',
-            'stop-stream',
-            'model',
-            'token-count'
+            'voices',
+            'conversions'
         ]
     }
 }

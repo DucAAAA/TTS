@@ -20,6 +20,22 @@ from requests.adapters import HTTPAdapter, Retry
 from runpod.serverless.utils.rp_validator import validate
 from schemas.api import API_SCHEMA
 from TTS.api import TTS
+from threading import Thread
+import time
+import random
+import os
+import boto3
+
+aws_access_key_id = ''
+aws_secret_access_key = ''
+region_name = 'nyc3'
+s3 = boto3.client(
+    's3',
+    endpoint_url='https://nyc3.digitaloceanspaces.com',
+    aws_access_key_id=aws_access_key_id,
+    aws_secret_access_key=aws_secret_access_key,
+    region_name=region_name
+)
 
 def create_argparser():
     def convert_boolean(x):
@@ -131,6 +147,10 @@ language_manager = getattr(synthesizer.tts_model, "language_manager", None)
 # TODO: set this from SpeakerManager
 use_gst = synthesizer.tts_config.get("use_gst", False)
 app = Flask(__name__)
+
+
+# Declare TTS model
+xtts_v2_object = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2", gpu=True).to("cuda")
 
 
 def style_wav_uri_to_dict(style_wav: str) -> Union[str, dict]:
@@ -309,15 +329,31 @@ def handler(event):
     try:
         if method == 'POST':
             if endpoint == 'voices':
-                tts = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2", gpu=True).to("cuda")
-                tts.tts_to_file(
-                    text="It took me quite a long time to develop a voice, and now that I have it I'm not going to be silent.",
-                    file_path="/root/workspace/TTS/outputs/output.wav",
-                    speaker_wav="/root/workspace/TTS/samples/bria-young-and-soft.mp3",
-                    language="en"
+                random_epoch = str(int(time.time() * 1000) + random.randint(1, 999))
+                file_name = 'output_' + random_epoch + '.wav'
+                file_path = '/root/workspace/outputs/' + file_name
+                model_path = "/root/workspace/samples/" + payload['model']
+                xtts_v2_object.tts_to_file(
+                    text=payload['prompt'],
+                    file_path=file_path,
+                    speaker_wav=model_path,
+                    language=payload['language']
                 )
+                object_key = payload['s3_storage']['key']
+                if not object_key.endswith('/'):
+                    object_key = object_key + '/'
+                object_key = object_key + file_name
+                s3.upload_file(file_path, payload['s3_storage']['bucket'], object_key, ExtraArgs={'ACL': 'public-read'})
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                    except Exception as e:
+                        print(f"Error deleting file: {e}")
+                return {
+                    'url': 'https://' + payload['s3_storage']['bucket'] + '.' + region_name + '.cdn.digitaloceanspaces.com/' + object_key
+                }
             elif endpoint == 'conversions':
-                tts = TTS(model_name="voice_conversion_models/multilingual/vctk/freevc24", gpu=True).to("cuda")
+                voice_conversion_object = TTS(model_name="voice_conversion_models/multilingual/vctk/freevc24", gpu=True).to("cuda")
                 
     except Exception as e:
         return {
@@ -330,13 +366,17 @@ def handler(event):
     }
 
 def main():
-    # download models
-    TTS(model_name="voice_conversion_models/multilingual/vctk/freevc24", progress_bar=False).to("cuda")
+    Thread(target=flask_app, daemon=True).start()
+    runpod_serverless()
+
+def runpod_serverless():
     runpod.serverless.start(
         {
             'handler': handler
         }
     )
+
+def flask_app():
     app.run(debug=args.debug, host="::", port=args.port)
 
 

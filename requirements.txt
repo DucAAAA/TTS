@@ -56,3 +56,5 @@ num2words
 spacy[ja]>=3
 # runpod
 runpod
+# aws s3
+boto3
