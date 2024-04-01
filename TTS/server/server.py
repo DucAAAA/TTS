@@ -25,17 +25,7 @@ import time
 import random
 import os
 import boto3
-
-aws_access_key_id = ''
-aws_secret_access_key = ''
-region_name = 'nyc3'
-s3 = boto3.client(
-    's3',
-    endpoint_url='https://nyc3.digitaloceanspaces.com',
-    aws_access_key_id=aws_access_key_id,
-    aws_secret_access_key=aws_secret_access_key,
-    region_name=region_name
-)
+from TTS.utils.s3_client import upload_file
 
 def create_argparser():
     def convert_boolean(x):
@@ -343,7 +333,7 @@ def handler(event):
                 if not object_key.endswith('/'):
                     object_key = object_key + '/'
                 object_key = object_key + file_name
-                s3.upload_file(file_path, payload['s3_storage']['bucket'], object_key, ExtraArgs={'ACL': 'public-read'})
+                s3_client.upload_file(file_path, payload['s3_storage']['bucket'], object_key)
                 if os.path.exists(file_path):
                     try:
                         os.remove(file_path)
